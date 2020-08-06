@@ -1,0 +1,11 @@
+/*
+ * gst-pe-config.h
+ * Author: Alberto García <alberto.garcia.guillen@gmail.com>
+*/
+
+#pragma once
+
+#define GST_PE_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define GST_PE_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define GST_PE_VERSION_PATCH @PROJECT_VERSION_PATCH@
+#define GST_PE_VERSION_STRING "@PROJECT_VERSION@"
