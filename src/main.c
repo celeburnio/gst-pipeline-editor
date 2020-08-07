@@ -9,7 +9,7 @@
 int
 main(int argc, char *argv[])
 {
-        g_autoptr(GApplication) app = G_APPLICATION (gst_pipeline_editor_get_default ());
+    g_autoptr(GApplication) app = G_APPLICATION (gst_pipeline_editor_get_default ());
 
-        return g_application_run(app, argc, argv);
+    return g_application_run(app, argc, argv);
 }

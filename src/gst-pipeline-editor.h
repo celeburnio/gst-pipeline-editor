@@ -19,7 +19,7 @@ G_DECLARE_FINAL_TYPE (GstPipelineEditor, gst_pipeline_editor, GST_PE, APPLICATIO
 
 struct _GstPipelineEditorClass
 {
-        GstPipelineEditorBaseClass parent_class;
+    GstPipelineEditorBaseClass parent_class;
 };
 
 GstPipelineEditor* gst_pipeline_editor_get_default (void);
