@@ -74,11 +74,13 @@ static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
 static struct
 {
     gboolean version;
+    GStrv    arguments;
 } s_options;
 
 static GOptionEntry s_cli_options[] =
 {
-    { "version", 'v', 0, G_OPTION_ARG_NONE, &s_options.version, "Print version and exit", NULL },
+    { "version", 'v', 0, G_OPTION_ARG_NONE, &s_options.version, "Print version and exit.", NULL },
+    { G_OPTION_REMAINING, '\0', 0, G_OPTION_ARG_FILENAME_ARRAY, &s_options.arguments, "", "PIPELINE-DESCRIPTION" },
 };
 
 
@@ -127,11 +129,21 @@ static void
 gst_pipeline_editor_startup (GApplication *application)
 {
     GstPipelineEditor *app = GST_PE_APPLICATION(application);
-
     G_APPLICATION_CLASS(gst_pipeline_editor_parent_class)->startup(application);
+    const char *uri = NULL;
 
+    if (!s_options.arguments) {
+        g_printerr ("%s: URL not passed in the command line, exiting\n", g_get_prgname ());
+            return;
+    } else if (g_strv_length (s_options.arguments) > 1) {
+        g_printerr ("%s: Cannot load more than one URL.\n", g_get_prgname ());
+        return;
+    } else {
+        uri = s_options.arguments[0];
+        g_printerr ("%s: Launching URI: %s\n", g_get_prgname (), uri);
+    }
     /* Build the pipeline */
-    app->pipeline = gst_parse_launch ("playbin uri=https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
+    app->pipeline = gst_parse_launch (g_strconcat ("playbin uri=", uri, NULL), NULL);
     app->bus = gst_element_get_bus (app->pipeline);
 
     /* Start playing */
