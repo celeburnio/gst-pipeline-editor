@@ -5,7 +5,9 @@ include(GNUInstallDirs)
 project(gst-pipeline-editor VERSION "0.0.0" LANGUAGES C)
 
 find_package(PkgConfig)
-pkg_check_modules(GST_PE_DEPS REQUIRED gio-2.0)
+pkg_check_modules(GST_PE_DEPS REQUIRED  gio-2.0
+                                        gstreamer-1.0>=1.16.0
+                                        gstreamer-base-1.0>=1.1.6.0)
 
 configure_file(src/gst-pe-config.h.in src/gst-pe-config.h @ONLY)
 
