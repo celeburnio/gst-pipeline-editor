@@ -12,10 +12,63 @@
 struct _GstPipelineEditor {
     GstPipelineEditorBase  parent;
 
+    GstBus *bus;
+    GstStateChangeReturn ret;
+    GstElement *pipeline;
+    GMainLoop *main_loop;
+    CustomData data;
+
     guint               sigint_source;
     guint               sigterm_source;
 };
 
+/* Callbacks */
+static void cb_message (GstBus *bus, GstMessage *msg, CustomData *data) {
+
+  switch (GST_MESSAGE_TYPE (msg)) {
+    case GST_MESSAGE_ERROR: {
+      GError *err;
+      gchar *debug;
+
+      gst_message_parse_error (msg, &err, &debug);
+      g_print ("Error: %s\n", err->message);
+      g_error_free (err);
+      g_free (debug);
+
+      gst_element_set_state (data->pipeline, GST_STATE_READY);
+      g_main_loop_quit (data->loop);
+      break;
+    }
+    case GST_MESSAGE_EOS:
+      /* end-of-stream */
+      gst_element_set_state (data->pipeline, GST_STATE_READY);
+      g_main_loop_quit (data->loop);
+      break;
+    case GST_MESSAGE_BUFFERING: {
+      gint percent = 0;
+
+      /* If the stream is live, we do not care about buffering. */
+      if (data->is_live) break;
+
+      gst_message_parse_buffering (msg, &percent);
+      g_print ("Buffering (%3d%%)\r", percent);
+      /* Wait until buffering is complete before start/resume playing */
+      if (percent < 100)
+        gst_element_set_state (data->pipeline, GST_STATE_PAUSED);
+      else
+        gst_element_set_state (data->pipeline, GST_STATE_PLAYING);
+      break;
+    }
+    case GST_MESSAGE_CLOCK_LOST:
+      /* Get a new clock */
+      gst_element_set_state (data->pipeline, GST_STATE_PAUSED);
+      gst_element_set_state (data->pipeline, GST_STATE_PLAYING);
+      break;
+    default:
+      /* Unhandled message */
+      break;
+    }
+}
 
 /* Options */
 static struct
@@ -76,6 +129,29 @@ gst_pipeline_editor_startup (GApplication *application)
     GstPipelineEditor *app = GST_PE_APPLICATION(application);
 
     G_APPLICATION_CLASS(gst_pipeline_editor_parent_class)->startup(application);
+
+    /* Build the pipeline */
+    app->pipeline = gst_parse_launch ("playbin uri=https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_trailer-480p.webm", NULL);
+    app->bus = gst_element_get_bus (app->pipeline);
+
+    /* Start playing */
+    app->ret = gst_element_set_state (app->pipeline, GST_STATE_PLAYING);
+    if (app->ret == GST_STATE_CHANGE_FAILURE) {
+        g_printerr ("Unable to set the pipeline to the playing state.\n");
+        gst_object_unref (app->pipeline);
+        return;
+    } else if (app->ret == GST_STATE_CHANGE_NO_PREROLL) {
+        app->data.is_live = TRUE;
+    }
+
+    app->main_loop = g_main_loop_new (NULL, FALSE);
+    app->data.loop = app->main_loop;
+    app->data.pipeline = app->pipeline;
+
+    gst_bus_add_signal_watch (app->bus);
+    g_signal_connect (app->bus, "message", G_CALLBACK (cb_message), &app->data);
+
+    g_main_loop_run (app->main_loop);
 
     g_application_hold(application);
 }

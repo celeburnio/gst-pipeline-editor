@@ -5,11 +5,18 @@
 
 #pragma once
 #include <gio/gio.h>
+#include <gst/gst.h>
 
 G_BEGIN_DECLS
 
 typedef GApplication GstPipelineEditorBase;
 typedef GApplicationClass GstPipelineEditorBaseClass;
+
+typedef struct _CustomData {
+  gboolean is_live;
+  GstElement *pipeline;
+  GMainLoop *loop;
+} CustomData;
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (GstPipelineEditorBase, g_object_unref)
 
