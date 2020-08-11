@@ -8,6 +8,8 @@
 #include "gst-pe-config.h"
 
 #include <glib-unix.h>
+#include <stdio.h>
+#include <string.h>
 
 struct _GstPipelineEditor {
     GstPipelineEditorBase  parent;
@@ -116,6 +118,96 @@ static void error_cb (GstBus *bus, GstMessage *msg, CustomData *data) {
   g_main_loop_quit (data->loop);
 }
 
+/* Send seek event to change rate */
+static void
+send_seek_event (CustomData * data)
+{
+  gint64 position;
+  GstEvent *seek_event;
+
+  /* Obtain the current position, needed for the seek event */
+  if (!gst_element_query_position (data->pipeline, GST_FORMAT_TIME, &position)) {
+    g_printerr ("Unable to retrieve current position.\n");
+    return;
+  }
+
+  /* Create the seek event */
+  if (data->rate > 0) {
+    seek_event =
+        gst_event_new_seek (data->rate, GST_FORMAT_TIME,
+        GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, GST_SEEK_TYPE_SET,
+        position, GST_SEEK_TYPE_END, 0);
+  } else {
+    seek_event =
+        gst_event_new_seek (data->rate, GST_FORMAT_TIME,
+        GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, GST_SEEK_TYPE_SET, 0,
+        GST_SEEK_TYPE_SET, position);
+  }
+
+  if (data->video_sink == NULL) {
+    /* If we have not done so, obtain the sink through which we will send the seek events */
+    g_object_get (data->pipeline, "video-sink", &data->video_sink, NULL);
+  }
+
+  /* Send the event */
+  gst_element_send_event (data->video_sink, seek_event);
+
+  g_print ("Current rate: %g\n", data->rate);
+}
+
+/* Process keyboard input */
+static gboolean
+handle_keyboard (GIOChannel * source, GIOCondition cond, CustomData * data)
+{
+  gchar *str = NULL;
+
+  if (g_io_channel_read_line (source, &str, NULL, NULL,
+          NULL) != G_IO_STATUS_NORMAL) {
+    return TRUE;
+  }
+
+  switch (g_ascii_tolower (str[0])) {
+    case 'p':
+      data->playing = !data->playing;
+      gst_element_set_state (data->pipeline,
+          data->playing ? GST_STATE_PLAYING : GST_STATE_PAUSED);
+      g_print ("Setting state to %s\n", data->playing ? "PLAYING" : "PAUSE");
+      break;
+    case 's':
+      if (g_ascii_isupper (str[0])) {
+        data->rate *= 2.0;
+      } else {
+        data->rate /= 2.0;
+      }
+      send_seek_event (data);
+      break;
+    case 'd':
+      data->rate *= -1.0;
+      send_seek_event (data);
+      break;
+    case 'n':
+      if (data->video_sink == NULL) {
+        /* If we have not done so, obtain the sink through which we will send the step events */
+        g_object_get (data->pipeline, "video-sink", &data->video_sink, NULL);
+      }
+
+      gst_element_send_event (data->video_sink,
+          gst_event_new_step (GST_FORMAT_BUFFERS, 1, ABS (data->rate), TRUE,
+              FALSE));
+      g_print ("Stepping one frame\n");
+      break;
+    case 'q':
+      g_main_loop_quit (data->loop);
+      break;
+    default:
+      break;
+  }
+
+  g_free (str);
+
+  return TRUE;
+}
+
 static void
 gst_pipeline_editor_constructed (GObject *object)
 {
@@ -152,7 +244,24 @@ gst_pipeline_editor_startup (GApplication *application)
 {
     GstPipelineEditor *app = GST_PE_APPLICATION(application);
     G_APPLICATION_CLASS(gst_pipeline_editor_parent_class)->startup(application);
+    GIOChannel *io_stdin;
     const char *uri = NULL;
+
+    /* Print usage map */
+    g_print ("USAGE: Choose one of the following options, then press enter:\n"
+        " 'P' to toggle between PAUSE and PLAY\n"
+        " 'S' to increase playback speed, 's' to decrease playback speed\n"
+        " 'D' to toggle playback direction\n"
+        " 'N' to move to next frame (in the current direction, better in PAUSE)\n"
+        " 'Q' to quit\n");
+
+    /* Add a keyboard watch so we get notified of keystrokes */
+#ifdef G_OS_WIN32
+    io_stdin = g_io_channel_win32_new_fd (fileno (stdin));
+#else
+    io_stdin = g_io_channel_unix_new (fileno (stdin));
+#endif
+    g_io_add_watch (io_stdin, G_IO_IN, (GIOFunc) handle_keyboard, &app->data);
 
     if (!s_options.arguments) {
         g_printerr ("%s: URL not passed in the command line, exiting\n", g_get_prgname ());
@@ -181,6 +290,8 @@ gst_pipeline_editor_startup (GApplication *application)
         app->data.is_live = TRUE;
     }
 
+    app->data.playing = TRUE;
+    app->data.rate = 1.0;
     app->main_loop = g_main_loop_new (NULL, FALSE);
     app->data.loop = app->main_loop;
     app->data.pipeline = app->pipeline;

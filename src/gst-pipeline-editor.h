@@ -16,6 +16,10 @@ typedef struct _CustomData {
   gboolean is_live;
   GstElement *pipeline;
   GMainLoop *loop;
+  GstElement *video_sink;
+
+  gboolean playing;             /* Playing or Paused */
+  gdouble rate;                 /* Current playback rate (can be negative) */
 } CustomData;
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (GstPipelineEditorBase, g_object_unref)
