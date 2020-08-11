@@ -87,11 +87,33 @@ static GOptionEntry s_cli_options[] =
 G_DEFINE_TYPE (GstPipelineEditor, gst_pipeline_editor, G_TYPE_APPLICATION)
 
 static gboolean
-on_signal_quit (GstPipelineEditor *app)
+on_signal_quit (GstPipelineEditor *application)
 {
     g_message("Exiting...");
+    GstPipelineEditor *app = GST_PE_APPLICATION(application);
+    gst_element_set_state (app->pipeline, GST_STATE_NULL);
+    gst_object_unref (app->pipeline);
+    g_main_loop_quit (app->main_loop);
+    g_main_loop_unref (app->main_loop);
+    gst_object_unref (app->bus);
+
     g_application_quit(G_APPLICATION(app));
     return G_SOURCE_CONTINUE;
+}
+
+/* This function is called when an error message is posted on the bus */
+static void error_cb (GstBus *bus, GstMessage *msg, CustomData *data) {
+  GError *err;
+  gchar *debug_info;
+
+  /* Print error details on the screen */
+  gst_message_parse_error (msg, &err, &debug_info);
+  g_printerr ("Error received from element %s: %s\n", GST_OBJECT_NAME (msg->src), err->message);
+  g_printerr ("Debugging information: %s\n", debug_info ? debug_info : "none");
+  g_clear_error (&err);
+  g_free (debug_info);
+
+  g_main_loop_quit (data->loop);
 }
 
 static void
@@ -145,6 +167,9 @@ gst_pipeline_editor_startup (GApplication *application)
     /* Build the pipeline */
     app->pipeline = gst_parse_launch (g_strconcat ("playbin uri=", uri, NULL), NULL);
     app->bus = gst_element_get_bus (app->pipeline);
+
+    gst_bus_add_signal_watch (app->bus);
+    g_signal_connect (G_OBJECT (app->bus), "message::error", (GCallback)error_cb, &app->data);
 
     /* Start playing */
     app->ret = gst_element_set_state (app->pipeline, GST_STATE_PLAYING);
