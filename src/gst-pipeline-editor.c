@@ -198,8 +198,6 @@ gst_pipeline_editor_activate (GApplication *application)
 static void
 gst_pipeline_editor_dispose (GObject *object)
 {
-    GstPipelineEditor *app = GST_PE_APPLICATION(object);
-
     G_OBJECT_CLASS(gst_pipeline_editor_parent_class)->dispose(object);
 }
 
