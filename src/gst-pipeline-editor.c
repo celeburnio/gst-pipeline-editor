@@ -203,6 +203,23 @@ handle_keyboard (GIOChannel * source, GIOCondition cond, CustomData * data)
                 FALSE));
         g_print ("Stepping one frame\n");
         break;
+    case 'l':
+        query = gst_query_new_latency ();
+        if ((gst_element_query (data->pipeline, query))) {
+            gboolean is_live;
+            GstClockTime min, max;
+
+            gst_query_parse_latency (query, &is_live, &min, &max);
+            g_print ("got latency min %" GST_TIME_FORMAT ", max %" GST_TIME_FORMAT
+            ", live %d", GST_TIME_ARGS (min), GST_TIME_ARGS (max), is_live);
+
+            gst_query_unref (query);
+        } else {
+            /* conservatively use passive locking if the query fails */
+            g_print ("Latency query failed - fall back to using passive locking");
+            gst_query_unref (query);
+        }
+        break;
     case 'q':
         g_main_loop_quit (data->loop);
         break;
