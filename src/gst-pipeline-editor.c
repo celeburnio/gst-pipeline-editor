@@ -112,107 +112,107 @@ on_signal_quit (GstPipelineEditor *application)
 
 /* This function is called when an error message is posted on the bus */
 static void error_cb (GstBus *bus, GstMessage *msg, CustomData *data) {
-  GError *err;
-  gchar *debug_info;
+    GError *err;
+    gchar *debug_info;
 
-  /* Print error details on the screen */
-  gst_message_parse_error (msg, &err, &debug_info);
-  g_printerr ("Error received from element %s: %s\n", GST_OBJECT_NAME (msg->src), err->message);
-  g_printerr ("Debugging information: %s\n", debug_info ? debug_info : "none");
-  g_clear_error (&err);
-  g_free (debug_info);
+    /* Print error details on the screen */
+    gst_message_parse_error (msg, &err, &debug_info);
+    g_printerr ("Error received from element %s: %s\n", GST_OBJECT_NAME (msg->src), err->message);
+    g_printerr ("Debugging information: %s\n", debug_info ? debug_info : "none");
+    g_clear_error (&err);
+    g_free (debug_info);
 
-  g_main_loop_quit (data->loop);
+    g_main_loop_quit (data->loop);
 }
 
 /* Send seek event to change rate */
 static void
 send_seek_event (CustomData * data)
 {
-  gint64 position;
-  GstEvent *seek_event;
+    gint64 position;
+    GstEvent *seek_event;
 
-  /* Obtain the current position, needed for the seek event */
-  if (!gst_element_query_position (data->pipeline, GST_FORMAT_TIME, &position)) {
-    g_printerr ("Unable to retrieve current position.\n");
-    return;
-  }
+    /* Obtain the current position, needed for the seek event */
+    if (!gst_element_query_position (data->pipeline, GST_FORMAT_TIME, &position)) {
+        g_printerr ("Unable to retrieve current position.\n");
+        return;
+    }
 
-  /* Create the seek event */
-  if (data->rate > 0) {
-    seek_event =
-        gst_event_new_seek (data->rate, GST_FORMAT_TIME,
-        GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, GST_SEEK_TYPE_SET,
-        position, GST_SEEK_TYPE_END, 0);
-  } else {
-    seek_event =
-        gst_event_new_seek (data->rate, GST_FORMAT_TIME,
-        GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, GST_SEEK_TYPE_SET, 0,
-        GST_SEEK_TYPE_SET, position);
-  }
+    /* Create the seek event */
+    if (data->rate > 0) {
+        seek_event =
+            gst_event_new_seek (data->rate, GST_FORMAT_TIME,
+            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, GST_SEEK_TYPE_SET,
+            position, GST_SEEK_TYPE_END, 0);
+    } else {
+        seek_event =
+            gst_event_new_seek (data->rate, GST_FORMAT_TIME,
+            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE, GST_SEEK_TYPE_SET, 0,
+            GST_SEEK_TYPE_SET, position);
+    }
 
-  if (data->video_sink == NULL) {
-    /* If we have not done so, obtain the sink through which we will send the seek events */
-    g_object_get (data->pipeline, "video-sink", &data->video_sink, NULL);
-  }
+    if (data->video_sink == NULL) {
+        /* If we have not done so, obtain the sink through which we will send the seek events */
+        g_object_get (data->pipeline, "video-sink", &data->video_sink, NULL);
+    }
 
-  /* Send the event */
-  gst_element_send_event (data->video_sink, seek_event);
+    /* Send the event */
+    gst_element_send_event (data->video_sink, seek_event);
 
-  g_print ("Current rate: %g\n", data->rate);
+    g_print ("Current rate: %g\n", data->rate);
 }
 
 /* Process keyboard input */
 static gboolean
 handle_keyboard (GIOChannel * source, GIOCondition cond, CustomData * data)
 {
-  gchar *str = NULL;
+    gchar *str = NULL;
+    GstQuery *query;
 
-  if (g_io_channel_read_line (source, &str, NULL, NULL,
-          NULL) != G_IO_STATUS_NORMAL) {
-    return TRUE;
-  }
+    if (g_io_channel_read_line (source, &str, NULL, NULL, NULL) != G_IO_STATUS_NORMAL) {
+        return TRUE;
+    }
 
-  switch (g_ascii_tolower (str[0])) {
+    switch (g_ascii_tolower (str[0])) {
     case 'p':
-      data->playing = !data->playing;
-      gst_element_set_state (data->pipeline,
-          data->playing ? GST_STATE_PLAYING : GST_STATE_PAUSED);
-      g_print ("Setting state to %s\n", data->playing ? "PLAYING" : "PAUSE");
-      break;
+        data->playing = !data->playing;
+        gst_element_set_state (data->pipeline,
+            data->playing ? GST_STATE_PLAYING : GST_STATE_PAUSED);
+        g_print ("Setting state to %s\n", data->playing ? "PLAYING" : "PAUSE");
+        break;
     case 's':
-      if (g_ascii_isupper (str[0])) {
-        data->rate *= 2.0;
-      } else {
-        data->rate /= 2.0;
-      }
-      send_seek_event (data);
-      break;
+        if (g_ascii_isupper (str[0])) {
+            data->rate *= 2.0;
+        } else {
+            data->rate /= 2.0;
+        }
+        send_seek_event (data);
+        break;
     case 'd':
-      data->rate *= -1.0;
-      send_seek_event (data);
-      break;
+        data->rate *= -1.0;
+        send_seek_event (data);
+        break;
     case 'n':
-      if (data->video_sink == NULL) {
-        /* If we have not done so, obtain the sink through which we will send the step events */
-        g_object_get (data->pipeline, "video-sink", &data->video_sink, NULL);
-      }
+        if (data->video_sink == NULL) {
+            /* If we have not done so, obtain the sink through which we will send the step events */
+            g_object_get (data->pipeline, "video-sink", &data->video_sink, NULL);
+        }
 
-      gst_element_send_event (data->video_sink,
-          gst_event_new_step (GST_FORMAT_BUFFERS, 1, ABS (data->rate), TRUE,
-              FALSE));
-      g_print ("Stepping one frame\n");
-      break;
+        gst_element_send_event (data->video_sink,
+            gst_event_new_step (GST_FORMAT_BUFFERS, 1, ABS (data->rate), TRUE,
+                FALSE));
+        g_print ("Stepping one frame\n");
+        break;
     case 'q':
-      g_main_loop_quit (data->loop);
-      break;
+        g_main_loop_quit (data->loop);
+        break;
     default:
-      break;
-  }
+        break;
+    }
 
-  g_free (str);
+    g_free (str);
 
-  return TRUE;
+    return TRUE;
 }
 
 static void
